@@ -11,13 +11,15 @@
 
 namespace Xenon\LaravelBDSms\Provider;
 
-use GuzzleHttp\Exception\GuzzleException;
 use Xenon\LaravelBDSms\Handler\ParameterException;
+use Xenon\LaravelBDSms\Handler\RenderException;
 use Xenon\LaravelBDSms\Request;
 use Xenon\LaravelBDSms\Sender;
 
 class Banglalink extends AbstractProvider
 {
+    private string $apiEndpoint = 'https://vas.banglalink.net/sendSMS/sendSMS';
+
     /**
      * Banglalink constructor.
      * @param Sender $sender
@@ -29,7 +31,7 @@ class Banglalink extends AbstractProvider
 
     /**
      * Send Request To Api and Send Message
-     * @throws GuzzleException
+     * @throws RenderException
      */
     public function sendRequest()
     {
@@ -37,6 +39,9 @@ class Banglalink extends AbstractProvider
         $text = $this->senderObject->getMessage();
         $config = $this->senderObject->getConfig();
         $queue = $this->senderObject->getQueue();
+        $queueName = $this->senderObject->getQueueName();
+        $tries=$this->senderObject->getTries();
+        $backoff=$this->senderObject->getBackoff();
 
         $formParams = [
             'userID' => $config['userID'],
@@ -46,7 +51,7 @@ class Banglalink extends AbstractProvider
             'message' => $text,
         ];
 
-        $requestObject = new Request('https://vas.banglalink.net/sendSMS/sendSMS', [], $queue);
+        $requestObject = new Request($this->apiEndpoint, [], $queue, [], $queueName,$tries,$backoff);
         $requestObject->setFormParams($formParams);
         $response = $requestObject->post();
         if ($queue) {

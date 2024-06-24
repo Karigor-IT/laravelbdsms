@@ -10,8 +10,8 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Log as LaravelLog;
 use JsonException;
-use Psr\Http\Message\ResponseInterface;
 use Xenon\LaravelBDSms\Facades\Logger;
 
 class SendSmsJob implements ShouldQueue
@@ -24,6 +24,21 @@ class SendSmsJob implements ShouldQueue
     private array $jobDetails;
 
     /**
+     * The number of times the job may be attempted.
+     *
+     * @var int
+     */
+    public $tries = 3;
+
+    /**
+     * The number of seconds to wait before retrying the job.
+     *
+     * @var int
+     */
+    public $backoffSeconds = 60;
+
+
+    /**
      * Create a new job instance.
      *
      * @return void
@@ -31,24 +46,29 @@ class SendSmsJob implements ShouldQueue
     public function __construct(array $jobDetails)
     {
         $this->jobDetails = $jobDetails;
+        if (isset($jobDetails['tries']) && is_integer($jobDetails['tries'])) {
+            $this->tries = $jobDetails['tries'];
+        }
+        if (isset($jobDetails['backoff']) && is_integer($jobDetails['backoff'])) {
+            $this->backoffSeconds = $jobDetails['backoff'];
+        }
     }
 
     /**
      * Execute the job.
      *
-     * @return ResponseInterface
-     * @throws GuzzleException
+     * @return void
+     * @throws GuzzleException|JsonException
      */
     public function handle()
     {
 
-
         if ($this->jobDetails['method'] == 'post') {
-            return $this->postMethodHandler();
-
+            $this->postMethodHandler();
         } else {
-            return $this->getMethodHandler();
+            $this->getMethodHandler();
         }
+
     }
 
     /**
@@ -106,7 +126,7 @@ class SendSmsJob implements ShouldQueue
             $log = [
                 'provider' => $this->jobDetails['requestUrl'],
                 'request_json' => json_encode($this->jobDetails['query'], JSON_THROW_ON_ERROR),
-                'response_json' => json_encode($e->getMessage()),
+                'response_json' => json_encode($e->getMessage(), JSON_THROW_ON_ERROR),
             ];
         }
 
@@ -121,7 +141,25 @@ class SendSmsJob implements ShouldQueue
     {
         $config = Config::get('sms');
         if ($config['sms_log']) {
-            Logger::createLog($log);
+
+            if (array_key_exists('log_driver', $config)) {
+
+                if ($config['log_driver'] === 'database') {
+                    Logger::createLog($log);
+                } else if ($config['log_driver'] === 'file') {
+                    LaravelLog::info('laravelbdsms', $log);
+                }
+            } else {
+                Logger::createLog($log);
+            }
         }
+    }
+
+    /**
+     * Calculate the number of seconds to wait before retrying the job.
+     */
+    public function backoff(): int
+    {
+        return $this->backoffSeconds;
     }
 }

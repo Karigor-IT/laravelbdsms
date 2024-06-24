@@ -15,6 +15,8 @@ class Request extends Controller
 {
     private bool $queue;
 
+    private string $queueName;
+
     private string $requestUrl;
 
     private array $query;
@@ -24,6 +26,14 @@ class Request extends Controller
     private array $headers;
 
     private bool $contentTypeJson = false;
+    /**
+     * @var int
+     */
+    private int $tries;
+    /**
+     * @var int
+     */
+    private int $backoff;
 
 
     /**
@@ -32,13 +42,19 @@ class Request extends Controller
      * @param array $query
      * @param bool $queue
      * @param array $headers
+     * @param string $queueName
+     * @param int $tries
+     * @param int $backoff
      */
-    public function __construct($requestUrl, array $query, bool $queue = false, array $headers = [])
+    public function __construct($requestUrl, array $query, bool $queue = false, array $headers = [], string $queueName = 'default', int $tries = 3, int $backoff = 60)
     {
         $this->requestUrl = $requestUrl;
         $this->query = $query;
         $this->queue = $queue;
         $this->headers = $headers;
+        $this->queueName = $queueName;
+        $this->tries = $tries;
+        $this->backoff = $backoff;
     }
 
 
@@ -48,7 +64,7 @@ class Request extends Controller
      * @throws RenderException
      */
 
-    public function get(bool $verify = false, $timeout = 10.0)
+    public function get(bool $verify = false, float $timeout = 10.0)
     {
         $client = new Client([
             'base_uri' => $this->requestUrl,
@@ -57,7 +73,7 @@ class Request extends Controller
 
         $requestOptions = $this->optionsGetRequest($verify, $timeout);
         if ($this->getQueue()) {
-            dispatch(new SendSmsJob($requestOptions));
+            dispatch(new SendSmsJob($requestOptions))->onQueue($this->queueName);
         } else {
 
             try {
@@ -86,8 +102,7 @@ class Request extends Controller
 
         try {
             if ($this->getQueue()) {
-
-                dispatch(new SendSmsJob($requestOptions));
+                dispatch(new SendSmsJob($requestOptions))->onQueue($this->queueName);
             } else {
                 return $client->request('post', $this->requestUrl, $requestOptions);
             }
@@ -116,9 +131,9 @@ class Request extends Controller
     }
 
     /**
-     * @return mixed
+     * @return string
      */
-    public function getRequestUrl()
+    public function getRequestUrl(): string
     {
         return $this->requestUrl;
     }
@@ -132,9 +147,9 @@ class Request extends Controller
     }
 
     /**
-     * @return mixed
+     * @return array
      */
-    public function getQuery()
+    public function getQuery(): array
     {
         return $this->query;
     }
@@ -206,7 +221,7 @@ class Request extends Controller
      * @param mixed $timeout
      * @return array
      */
-    private function optionsGetRequest(bool $verify, mixed $timeout): array
+    private function optionsGetRequest(bool $verify, float $timeout): array
     {
         $options = [
             'requestUrl' => $this->requestUrl,
@@ -214,6 +229,8 @@ class Request extends Controller
             'verify' => $verify,
             'timeout' => $timeout,
             'method' => 'get',
+            'tries' => $this->tries,
+            'backoff' => $this->backoff
         ];
         if (!empty($this->headers)) {
             $options['headers'] = $this->headers;
@@ -239,6 +256,8 @@ class Request extends Controller
             'verify' => $verify,
             'timeout' => $timeout,
             'method' => 'post',
+            'tries' => $this->tries,
+            'backoff' => $this->backoff
         ];
         if (!empty($this->headers)) {
             $options['headers'] = $this->headers;

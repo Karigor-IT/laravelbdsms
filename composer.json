@@ -13,7 +13,7 @@
         "guzzlehttp/guzzle": "^6.3|^7.3",
         "ext-json": "*",
         "ext-curl": "*",
-        "php": ">=7.2"
+        "php": ">=7.4"
     },
     "autoload": {
         "psr-4": {
@@ -27,8 +27,7 @@
             ],
             "aliases": {
                 "SMS": "Xenon\\LaravelBDSms\\Facades\\SMS",
-                "LaravelBDSms": "Xenon\\LaravelBDSms\\Facades\\SMS",
-                "LaravelBDSmsLogger": "Xenon\\LaravelBDSms\\Facades\\Logger"
+                "LaravelBDSms": "Xenon\\LaravelBDSms\\Facades\\SMS"
             }
         }
     }
